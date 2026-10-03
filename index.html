@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>破门而入 3 · 2D 战术小队</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ============ 主菜单 ============ -->
+<div id="screen-menu" class="screen">
+  <div class="menu-wrap">
+    <header class="menu-head">
+      <h1>破门而入 <span>3</span></h1>
+      <p class="tagline">2D 俯视 · 即时战术 · 规划与执行</p>
+      <p class="sub">灵感来自 Door Kickers 2: Task Force North —— 没有回合、没有行动点，只有自由规划与实时执行。</p>
+    </header>
+
+    <div class="menu-tips">
+      <div class="tip-title">核心机制</div>
+      <ul>
+        <li><b>视野锥</b> 90°（顾问 110°），背后永远是盲区</li>
+        <li><b>无遮挡视线</b> 被墙、家具、关闭的门阻挡；窗只挡人挡不住视线</li>
+        <li><b>掩体</b> 只对掩体方向提供减伤，侧面与背后无效</li>
+        <li><b>穿甲</b> 0-70 制：穿甲值低于护甲等级则伤害大幅衰减</li>
+        <li><b>噪音</b> 踹门 7m、破门霰弹 25m、破门炸药 40m、消音枪 8m</li>
+        <li><b>反应时间</b> 普通敌人 1.5s，专家 0.5s，且视野扩至 120°</li>
+      </ul>
+    </div>
+
+    <div class="menu-actions">
+      <button id="btn-menu-doctrine" class="btn primary">战术信条 · 技能树</button>
+      <button id="btn-menu-help" class="btn ghost">操作说明</button>
+    </div>
+
+    <div class="missions">
+      <div id="mission-list"></div>
+    </div>
+
+    <footer class="menu-foot">
+      玩法与数值参考公开资料整理 · 美术全部程序化绘制 · 非商业同人练习
+    </footer>
+  </div>
+</div>
+
+<!-- ============ 任务简报 ============ -->
+<div id="screen-brief" class="screen hidden">
+  <div class="panel-wrap">
+    <div class="panel-head">
+      <div>
+        <div class="panel-cat" id="brief-cat"></div>
+        <h2 id="brief-title"></h2>
+      </div>
+      <div class="panel-actions">
+        <button id="btn-brief-back" class="btn ghost">返回</button>
+        <button id="btn-brief-next" class="btn primary">编队配置 →</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div id="brief-body"></div>
+      <div class="section-title">敌方情报</div>
+      <div id="brief-enemies" class="enemy-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 编队配置 ============ -->
+<div id="screen-loadout" class="screen hidden">
+  <div class="panel-wrap wide">
+    <div class="panel-head">
+      <div>
+        <div class="panel-cat">编队配置</div>
+        <h2 id="loadout-title"></h2>
+      </div>
+      <div class="panel-actions">
+        <button id="btn-loadout-back" class="btn ghost">← 简报</button>
+        <button id="btn-loadout-go" class="btn primary">开始任务</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div id="loadout-list" class="op-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 游戏 ============ -->
+<div id="hud" class="hidden">
+  <canvas id="game"></canvas>
+
+  <!-- 顶部条 -->
+  <div class="hud-top">
+    <div class="hud-left">
+      <div id="mode-badge" class="mode-badge">规划中 · 已暂停</div>
+      <div class="hud-time"><span id="hud-time">00:00</span></div>
+      <div class="hud-stat">敌人 <b id="hud-enemies">0</b>/<span id="hud-total">0</span></div>
+      <div class="hud-stat">击毙 <b id="hud-kills">0</b></div>
+      <div class="hud-stat">逮捕 <b id="hud-arrest">0</b></div>
+      <div class="hud-stat">伤亡 <b id="hud-deaths" class="bad">0</b></div>
+    </div>
+    <div class="hud-right">
+      <button id="btn-play" class="btn small primary">▶ 执行</button>
+      <button id="btn-stop" class="btn small">■ 停止</button>
+      <button id="btn-grenade" class="btn small">投掷</button>
+      <button id="btn-roster" class="btn small">队员</button>
+      <button id="btn-help" class="btn small ghost">?</button>
+      <button id="btn-abort" class="btn small danger">中止</button>
+    </div>
+  </div>
+
+  <!-- 目标 -->
+  <div class="hud-objectives">
+    <div class="obj-title">任务目标</div>
+    <div id="hud-objectives"></div>
+  </div>
+
+  <!-- 投掷物选择 -->
+  <div class="hud-grenades">
+    <div class="g-label">投掷物</div>
+    <span class="g-chip" data-gtype="frag">破片手雷</span>
+    <span class="g-chip" data-gtype="flash">闪光弹</span>
+    <span class="g-chip" data-gtype="smoke">烟雾弹</span>
+  </div>
+
+  <!-- 路径节点编辑条（选中某个路径节点时出现） -->
+  <div id="wp-bar" class="wp-bar hidden">
+    <div class="wb-head">
+      路径节点 <b id="wb-index">#1</b>
+      <span id="wb-mode" class="wb-mode"></span>
+      <span id="wb-flags" class="wb-flags"></span>
+    </div>
+    <div class="wb-row">
+      <span class="wb-label">朝向</span>
+      <button class="btn small" data-wp="focus">切角 · 注视某点</button>
+      <button class="btn small" data-wp="hard">固定角度</button>
+      <button class="btn small" data-wp="cancel">取消点</button>
+      <button class="btn small" data-wp="clear">清除</button>
+    </div>
+    <div class="wb-row">
+      <span class="wb-label">姿态</span>
+      <button class="btn small" data-wp="crouch">蹲 / 站</button>
+      <button class="btn small" data-wp="sprint">跑 / 走</button>
+      <button class="btn small" data-wp="halt">停顿</button>
+      <button class="btn small" data-wp="matchSpeed">与友军同速</button>
+    </div>
+    <div class="wb-row">
+      <span class="wb-label">动作</span>
+      <button class="btn small" data-wp="reload">换弹</button>
+      <button class="btn small" data-wp="swap">换枪</button>
+      <button class="btn small" data-wp="silent">静默</button>
+      <button class="btn small" data-wp="autoShoot">停下射击 / 不停下</button>
+      <button class="btn small danger" data-wp="del">删除节点</button>
+      <button class="btn small danger" data-wp="delAfter">删除此点之后</button>
+    </div>
+    <div class="wb-hint">
+      右键拖拽 = 设定方向（Ctrl = 固定角度） · <b>[</b> <b>]</b> 微调 5° · <b>Del</b> 删除 ·
+      <b>Alt / Shift / Ctrl + 左键点路径线</b> = 插入 普通 / 停顿 / 同速 节点<br>
+      <b>Shift+1~4</b> 切换 GO Code 自动触发 · <b>Shift+F</b> 全体静默 · <b>Shift+`</b> 全体停下射击
+    </div>
+  </div>
+
+  <!-- 队员面板 -->
+  <div id="trooper-panel" class="trooper-panel">
+    <div class="tp-title">队员 · <span id="sel-info">未选中</span></div>
+    <div id="trooper-list"></div>
+    <div class="tp-hint">
+      左键拖拽 = 画路径 · 右键 = 切朝向（Ctrl 强制 / Shift 锁定注视）<br>
+      点门 = 破门菜单 · 空格 = 暂停/执行 · 1-4 = GO Code<br>
+      C 蹲 · X 换枪 · H 停火 · G 投掷 · B 破墙 · L 慢动作 · F 视野锥 · Q 网格
+    </div>
+  </div>
+
+  <!-- 上下文化菜单 -->
+  <div id="ctx-menu" class="ctx-menu hidden"></div>
+</div>
+
+<!-- ============ 结算 ============ -->
+<div id="screen-result" class="screen hidden">
+  <div class="panel-wrap narrow">
+    <div class="panel-head">
+      <h2 id="res-title">任务成功</h2>
+    </div>
+    <div class="panel-body center">
+      <div id="res-stars" class="res-stars"></div>
+      <div id="res-reason" class="res-reason"></div>
+      <div id="res-stats" class="res-stats"></div>
+      <div id="res-notes" class="res-notes"></div>
+      <div id="res-xp" class="res-xp"></div>
+      <div class="panel-actions center">
+        <button id="btn-result-retry" class="btn ghost">重打本关</button>
+        <button id="btn-result-next" class="btn primary">下一关 →</button>
+        <button id="btn-result-menu" class="btn ghost">返回菜单</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 战术信条（技能树） ============ -->
+<div id="screen-doctrine" class="screen hidden">
+  <div class="panel-wrap wide">
+    <div class="panel-head">
+      <div>
+        <div class="panel-cat">战术信条 · Doctrine</div>
+        <h2>小队技能树</h2>
+      </div>
+      <div class="panel-actions">
+        <button id="btn-doc-reset" class="btn ghost">重置加点（免费）</button>
+        <button id="btn-doc-close" class="btn primary">返回</button>
+      </div>
+    </div>
+
+    <div class="doc-status">
+      <div class="doc-lv">
+        <span class="doc-lv-num" id="doc-level">1</span>
+        <span class="doc-lv-cap">/ 21 级</span>
+      </div>
+      <div class="doc-xpwrap">
+        <div class="doc-xpbar"><div class="doc-xpfill" id="doc-xpfill"></div></div>
+        <div class="doc-xptext" id="doc-xptext">0 / 200 XP</div>
+      </div>
+      <div class="doc-points">可用点数 <b id="doc-points">0</b></div>
+    </div>
+
+    <div class="doc-hint" id="doc-hint">
+      信条对<b>全队所有队员</b>生效，按武器类别分三棵树。每升 1 级得 1 点，重置不消耗点数。
+    </div>
+
+    <div class="doc-trees" id="doc-trees"></div>
+  </div>
+</div>
+
+<!-- ============ 帮助 ============ -->
+<div id="screen-help" class="screen hidden overlay">
+  <div class="help-wrap">
+    <div class="panel-head">
+      <h2>操作与机制</h2>
+      <button id="btn-help-close" class="btn ghost">关闭</button>
+    </div>
+    <div class="help-cols">
+      <div>
+        <h3>操作</h3>
+        <table class="help-tbl">
+          <tr><td>左键拖拽队员</td><td>画移动路径</td></tr>
+          <tr><td>左键点空地</td><td>选中队员移过去</td></tr>
+          <tr><td>Alt + 左键点路径线</td><td>插入普通路径节点（细分规划）</td></tr>
+          <tr><td>Shift + 左键点路径线</td><td>插入「停顿」节点（走到这里停住，等 GO Code）</td></tr>
+          <tr><td>Ctrl + 左键点路径线</td><td>插入「与友军同速」节点</td></tr>
+          <tr><td>左键点路径节点</td><td>选中节点（弹出节点编辑条）</td></tr>
+          <tr><td>Shift + 右键拖拽</td><td>切角：边走边把视野锥扫向该点</td></tr>
+          <tr><td>Ctrl + 右键拖拽</td><td>固定角度：边走边保持同一朝向</td></tr>
+          <tr><td>右键按住拖拽队员</td><td>视野锥跟随鼠标连续旋转</td></tr>
+          <tr><td>右键轻点队员</td><td>临时转向该方向（一移动就恢复）</td></tr>
+          <tr><td>选中节点后右键拖拽</td><td>给该节点设朝向（同上三种）</td></tr>
+          <tr><td>[ / ]</td><td>微调选中节点的角度（5°）</td></tr>
+          <tr><td>Del 或双击节点</td><td>删除路径节点</td></tr>
+          <tr><td>多选后右键拖拽</td><td>整组一起转向</td></tr>
+          <tr><td>左键点门</td><td>打开破门菜单</td></tr>
+          <tr><td>空格</td><td>暂停 / 执行</td></tr>
+          <tr><td>1 / 2 / 3 / 4</td><td>触发 GO Code（A / B / C / D 组）</td></tr>
+          <tr><td>Shift + 1 / 2 / 3 / 4</td><td>切换该 GO Code 自动触发（全组到位后自动激活）</td></tr>
+          <tr><td>Shift + F</td><td>全体切换静默（跑动 / 破门噪音降低）</td></tr>
+          <tr><td>Shift + `</td><td>全体切换 停下射击 / 不停下</td></tr>
+          <tr><td>TAB</td><td>循环多选队员</td></tr>
+          <tr><td>Esc</td><td>取消工具 / 关帮助 / 暂停继续</td></tr>
+          <tr><td>C / X / R / H</td><td>蹲 / 换枪 / 换弹 / 停火</td></tr>
+          <tr><td>G / B</td><td>规划投掷 / 规划破墙</td></tr>
+          <tr><td>L</td><td>慢动作</td></tr>
+          <tr><td>F / P / Q</td><td>视野锥 / 路径 / 网格</td></tr>
+          <tr><td>中键拖拽</td><td>平移视角</td></tr>
+          <tr><td>滚轮</td><td>缩放</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3>关键机制</h3>
+        <ul class="help-list">
+          <li><b>视野锥</b>：队员 90°，普通敌人 90°，外国顾问 110°，专家难度敌人 120°。锥外目标必须先转身才能瞄准，转身速度由机动性决定。</li>
+          <li><b>视线</b>：墙、家具、关闭的门阻挡视线；窗户和矮掩体不挡视线但挡移动/子弹。</li>
+          <li><b>掩体</b>：只对掩体方向有效，默认 50% 减伤。绕到侧面或背后打就无效。蹲下额外提升。</li>
+          <li><b>穿甲</b>：0-70 制。M4 穿甲 32 打 III 级插板（30）刚好穿透；破片/手枪穿甲低，对重甲无效。</li>
+          <li><b>噪音</b>：会在半径内惊动敌人去调查。踹门 7m / 撬棍 12m / 破门霰弹 25m / 破门炸药 40m / 消音枪 8m / 死亡惨叫 4m。</li>
+          <li><b>GO Code</b>：给队员分配 A/B/C/D 组，按 <b>1 / 2 / 3 / 4</b> 让同一组同时行动，用于多角度同步突入。</li>
+          <li><b>断电</b>：靠近配电箱规划动作可切断全楼电源，黑暗会大幅缩短视野，装备夜视仪的队员不受影响。</li>
+          <li><b>自杀背心</b>：贴近队员后引爆；被爆炸击杀时也会连锁引爆，可以清场也会炸死自己人。</li>
+          <li><b>行刑者</b>：看到同伴尸体、听到枪声、看到门被打开会提前处决人质。优先击杀。</li>
+          <li><b>受击反应</b>：敌人被打中会立刻转向弹源；如果看不见射手，会循着弹道方向搜过来 —— 不会站着挨打。从背后偷袭只能争取一两秒。</li>
+          <li><b>切角（Slice the Pie）</b>：<b>Shift + 右键拖拽</b>标一个点，队员会沿路径行走的同时持续把视野锥转向那个点 —— 锥会跟着"扫"过去。绕着门窗或拐角画一段弧线走位时，这是最安全的清角方式。<b>Ctrl + 右键拖拽</b>则是固定角度（Strafe）：角度在世界坐标里不变，边走边保持同一个朝向。</li>
+          <li><b>细分规划</b>：每个路径节点都能单独设朝向（切角 / 固定角度 / 取消点）。<b>Alt / Shift / Ctrl + 左键点路径线</b>分别插入 普通 / 停顿 / 同速 节点；点节点选中后可右键拖拽设方向、<b>[ ]</b> 微调 5°、<b>Del</b> 删除。蓝色箭头 = 固定角度，紫色箭头 + 弧线 = 切角，✕ = 取消点。</li>
+          <li><b>节点动作</b>：选中节点后可在编辑条上给它挂动作 —— <b>蹲 / 站</b>、<b>跑 / 走</b>、<b>换弹</b>、<b>换枪</b>、<b>静默</b>、<b>停下射击 / 不停下</b>，还能<b>删除此点之后</b>的全部节点。节点下方会显示对应图标。</li>
+          <li><b>停顿 + GO Code 自动触发</b>：用 Shift+左键在门口插「停顿」节点，队员走到就停住；再按 <b>Shift+数字</b> 打开该组自动触发，全组到位后会自动一起进 —— 这就是标准的同步突入。</li>
+          <li><b>星级</b>：时间达标 + 无队员死亡 + 无平民伤亡 = 3 星。</li>
+          <li><b>战术信条</b>：主菜单里的技能树（参考 DK1 的 Doctrine）。按武器类别分手枪 / 长枪 / 破门三系，效果对全队生效。任务结算给小队经验，每升 1 级得 1 点，可免费重置。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/doctrine.js"></script>
+<script src="js/mapgen.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/player.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/mission.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
